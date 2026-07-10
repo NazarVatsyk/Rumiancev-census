@@ -111,17 +111,24 @@ rabotniki <- tidy_pereyaslav%>%
                                         `Через борг` = "Za dolh 19 rublej po prohovoru hrodskoho suda"  ,
                                         `За навчання` = c("Za vospitanie i obuchenie remeslu", "Vo izuchenii remesla" ,"bez zaplaty za obuchenie remeslu",  "Za obechenie remesla","Za obuchenie ramaslu", "Za obuchenie remesla", "Za obuchenie remesla, plat`e khozyajskoe", "Za obuchenie remeslu", "Za obuzhenie remeslu shevskomu"),
                                         інше = c("Z diskrecij")))%>%
-  select(dvor,age, social_status, sex, job_experience, money, `wage`,`Спосіб оплати`, hosp_ss, hosp_inc, hosp_job)%>%
-  mutate(job_experience= if_else(str_detect(job_experience, regex("[0-9]")),parse_number(job_experience), NA))%>%
-  filter(is.numeric(job_experience))
-cor.test(rabotniki$money, rabotniki$job_experience, method = "pearson")
-
+  select(dvor,age, social_status, sex, job_experience, money, `wage`,`Спосіб оплати`, hosp_ss, hosp_inc, hosp_job)
 
 ggplot(rabotniki)+
   geom_boxplot(aes(x= hosp_ss, y=age))
 
-ggplot(rabotniki)+
-  geom_boxplot(aes(cut_width(hosp_inc,width = 2, boundary=1), age))
+rabotniki%>%
+  mutate(hosp_inc=cut_width(hosp_inc, width =3, boundary = 1))%>%
+  group_by(hosp_inc)%>%
+  count()%>%
+  left_join(tidy_pereyaslav%>%
+              filter(status == "hospodar"&!is.na(capital))%>%
+              mutate(hosp_inc = cut_width(capital, width =3, boundary = 1))%>%
+              group_by(hosp_inc)%>%
+              count(),
+            join_by(hosp_inc))%>%
+  summarize(workers_per_owner = n.x/n.y)%>%
+  ggplot()+
+  geom_col(aes(hosp_inc, workers_per_owner))
 
 ggplot(rabotniki)+
   geom_point(aes(job_experience,money))
@@ -145,55 +152,12 @@ ggplot(oplata_ratio)+
   labs(title = "Структура оплати роботи за станом господаря",x="Стан господаря",y="%")
 ggplot(oplata_rabu_ratio)+
   geom_col(aes(social_status, ratio*100, fill= `Спосіб оплати`), position = "dodge")+
-  labs(title = "Структура оплати роботи за станом праціника",x="Стан",y="%")
+  labs(title = "Структура оплати роботи за станом працівника",x="Стан",y="%")
 hospodar_hroshi_platut <- rabotniki%>%
   filter(`Спосіб оплати`=="За гроші")
-write.csv2(hospodar_hroshi_platut,"C:\\Users\\ceoet\\Downloads\\Протокол район - Аркуш1.csv")
-hospodar_hroshi_platut_mean_wage <- read_csv("C:\\Users\\ceoet\\Downloads\\uhjjis - Протокол район - Аркуш1.csv")%>%
-  mutate(wage = parse_double(wage, locale = locale(decimal_mark = ",")))%>%
-  group_by(hosp_ss)%>%
-  summarise(mean_wage = mean(wage))%>%
-  filter(hosp_ss=="Підсусідки"|hosp_ss=="Шляхта"|hosp_ss=="Міщани"|hosp_ss=="Козаки"|hosp_ss=="Посполиті")
-ggplot(hospodar_hroshi_platut_mean_wage)+
-  geom_col(aes(fct_reorder(hosp_ss, mean_wage), mean_wage))+
-  labs(title="Середня зарплата у господаря за станом",x="Стан господаря",y="Середня зарплата")
-ggplot(oplata_ratio)+
-  geom_col(aes(social_status, ratio*100, fill= `Спосіб оплати`), position = "dodge")+
-  labs(title = "Структура оплати роботи за станом господаря",x="Стан господаря",y="%")
-zarplata_za_stanom <- read_csv("C:\\Users\\ceoet\\Downloads\\uhjjis - Протокол район - Аркуш1.csv")%>%
-  mutate(wage = parse_double(wage, locale = locale(decimal_mark = ",")))%>%
-  group_by(social_status)%>%
-  summarise(mean_wage = mean(wage))%>%
-  filter(social_status=="Підсусідки"|social_status=="Шляхта"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті")
-
-ggplot(zarplata_za_stanom)+
-  geom_col(aes(fct_reorder(social_status, mean_wage), mean_wage))+
-  labs(title="Середня зарплата за станом",x="Стан",y="Середня зарплата")
-  
-
-number_of_hospodars <- tidy_pereyaslav%>%
-  filter(status == "hospodar")%>%
-  filter(social_status=="Підсусідки"|social_status=="Шляхта"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті")%>%
-  count(social_status)%>%
-  mutate(nhosp = n)
-
-rabotniki_number <- rabotniki%>%
-  filter(hosp_ss=="Підсусідки"|hosp_ss=="Шляхта"|hosp_ss=="Міщани"|hosp_ss=="Козаки"|hosp_ss=="Посполиті")%>%
-  group_by(hosp_ss)%>%
-  count()%>%
-  mutate(nrab = n)
-hosp_per_rabot <- left_join(number_of_hospodars, rabotniki_number, join_by(social_status==hosp_ss))%>%
-  mutate(ratio = nrab/nhosp)
-
-ggplot(hosp_per_rabot%>%filter(social_status!="Шляхта"))+
-  geom_col(aes(fct_reorder(social_status,ratio), ratio))+
-  labs(title = "Кількість робітників на господаря", x = "Стан господаря", y = "Кількість робітників")
 
 
-ggplot(rabotniki%>%filter(social_status=="Підсусідки"|social_status=="Шляхта"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті"))+
-  geom_bar(aes(social_status))+
-  labs(title = "Сумарна кількість робітників на ")
-
+#migrants
 pruizd <- tidy_pereyaslav%>%
   filter(root!="Pereyaslav"&root!="Pereyaslav podvarok Zadolhomostianskij"&root!="Pereyaslava"&!is.na(root))%>%
   filter(!is.na(social_status)&social_status!="unknown")
