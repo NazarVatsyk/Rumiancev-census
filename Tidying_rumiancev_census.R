@@ -92,12 +92,15 @@ tidy_pereyaslav <- X_Rumiancev_census_Pereyaslav%>%
                                             "sirota", "staritca")
   ))%>%
   mutate(capital = parse_number(capital), job = as.factor(job))%>%
-  mutate(`Спосіб оплати` = fct_collapse(wage,
-                                        `За гроші` = c("Z zarabotku priadivoho","Z zarabotka priazhej khoziajskoj","na 0,5 roku za 40 kop","0,15","0,4", "0,6","0,8", "1","1 v god, odezha i kharchi khozyajskie","1,1","1,2","1,3", "1,4", "1,5", "1,8", "2", "2 v god, odezha khozyajskaya", "2,2", "2,4", "2,5", "3", "3, na odeji hoziayskoy", "3,25", "3,4","3,5", "4", "5", "6","60 kop", "60 kopeek, v odeyanii khozyajskom","7","8", "9"),                     
-                                        `За харчування та одяг` = c("Bez zaplaty za propitanie" ,"за пропитание в одежу","Za propitanie i snabzhenie", "Za propitanie I snabzhenie",  "Za propitanie I odezhu" ,"Za propitanie i odezhu", "Za propitanie bez zaplaty" ,"Za propitanie (bol'she pitaetsia z milostynnoho podajanija)","Za propitanie"  ,"Po svojstvu v odeyanii khozyajskom" ,"Na vsem soderzhanii svoem" ,"Na poslushanii", "Na propitanii hoziayskom" ,"Bez zaplaty na vsem svoem soderzhanii" ,"Bez zaplaty na vsem soderzhanii hoziajskom", "Bez zaplaty","Bez zaplaty na vsem soderzhanii hoziajskom"),
+  mutate(wage = fct_collapse( `wage(for_naymyt\`)`,
+                                        `За гроші` = c("Z zarabotku priadivoho","Z zarabotka priazhej khoziajskoj","na 0,5 roku za 40 kop","0,15","0,4", "0,6","0,8", "0,25","1","1 v god, odezha i kharchi khozyajskie","1,1","1,2","1,3", "1,4", "1,5", "1,8", "2", "2 v god, odezha khozyajskaya", "2,2", "2,4", "2,5", "3", "3, na odeji hoziayskoy", "0,25","12","3,25", "3,4","3,5", "4", "5", "6","60 kop", "60 kopeek, v odeyanii khozyajskom","7","8", "9"),                     
+                                        `За харчування та одяг` = c("na propitanii bez zaplaty", "Na soderzhanii bez zaplaty", "Bez zaplaty za propitanie" ,"за пропитание в одежу","Za propitanie i snabzhenie", "Za propitanie I snabzhenie",  "Za propitanie I odezhu" ,"Za propitanie i odezhu", "Za propitanie bez zaplaty" ,"Za propitanie (bol'she pitaetsia z milostynnoho podajanija)","Za propitanie"  ,"Po svojstvu v odeyanii khozyajskom" ,"Na vsem soderzhanii svoem" ,"Na poslushanii", "Na propitanii hoziayskom" ,"Bez zaplaty na vsem svoem soderzhanii" ,"Bez zaplaty na vsem soderzhanii hoziajskom", "Bez zaplaty","Bez zaplaty na vsem soderzhanii hoziajskom"),
                                         `Через борг` = "Za dolh 19 rublej po prohovoru hrodskoho suda"  ,
                                         `За навчання` = c("Za vospitanie i obuchenie remeslu", "Vo izuchenii remesla" ,"bez zaplaty za obuchenie remeslu",  "Za obechenie remesla","Za obuchenie ramaslu", "Za obuchenie remesla", "Za obuchenie remesla, plat`e khozyajskoe", "Za obuchenie remeslu", "Za obuzhenie remeslu shevskomu"),
-                                        інше = c("Z diskrecij")))
+                                        інше = c("Z diskrecij")))%>%
+  mutate(wage = case_when(str_detect(wage, pattern = "prop")~"За харчування та одяг",
+                   str_detect(wage, pattern = regex("obuch|izuch|Obuch")) ~ "За навчання", .default = wage))%>%
+  mutate(job_experience = if_else(str_detect(job_experience, pattern = regex("[0-9]")), parse_double(job_experience), NA))
 #Given that there is no socia status of kids we assign their parents' one to them
 tidy_pereyaslav <- tidy_pereyaslav%>%
   mutate(hospodar_ss = if_else(status=="hospodar", social_status, NA))%>%
@@ -106,4 +109,173 @@ tidy_pereyaslav <- tidy_pereyaslav%>%
                                    str_detect(status,regex('doch|brat|syn|sest', ignore_case = TRUE)), 
                                  hospodar_ss, 
                                  social_status))
+
+
+tidy_village <- X_Rumiancev_census_Villages%>%
+  fill(HH,hata,village)%>%
+  mutate(ralation = as.factor(ralation), social_status = as.factor(`soc. status`),
+         health=as.factor(health),
+         social_status = fct_collapse(social_status,
+                                      Козаки = c("k", "k,"),
+                                      Посполиті ="p",
+                                      Інше = c("s","shlyakht.", "?")))%>%
+  mutate(zemli = if_else(`plowed land`=="-", 0, parse_double(`plowed land`, locale= locale(decimal_mark = ","))),
+         age = parse_number(age))%>%
   
+  mutate(health = fct_collapse(health,
+                               Здоровий = c("healthy","health"),
+                               Зору = c("right eye does not see","can’t work because of old age, blind" ,"healthy, blind on right eye" , "eye disease" ,"blind on right eye"  ,"blind on left eye","blind","blind on one eye" ,"left wall-eye"),
+                               Слуху = c("deaf","voiceless  and deaf", "voiceless"  ),
+                               `Опорно-рухового апарату` = c("no  right hand" ,"crippled on one hand"    ,  "right hand damaged","right and left hand cripple","no right foot","Lame on left leg"  ,"lame on right hand" ,"lame","ill (sovsem iskalechena)" ,"ill (bolen na nohi I ruki)","decrepit" , "cripple", "crippled on left leg","crippled on both hands","bandy on left leg"  ,"weak in legs", "lame on right leg","lame on one leg","lame on left leg"   ,"ill legs","bandy-legged", "crippled on hands and legs","crippled on legs","has not left leg"),
+                               
+                               Інші = c("?", "Mangle sick confusion in the head"   ,"dumb",  "without a nose", "unknown"  ,"Ill (gostec)"     ,"unknown where he lives","scabby","poor health","Ill (na lico boleet)", "ill (gostec)" ,"ill"  ,"crippled by illness","disappeared without a trace","epilepsy (paduchaya bolezh`)" ),
+                               Старість = c("old age is weak","weak because of old age"  ,"Can’t work because of old age" ,"old","can’t work because of old age", "lame on right leg, weak because of old age")))%>%
+  filter(!is.na(social_status)&social_status!="unknown"&social_status!="m"&social_status!="d.")
+
+tidy_starodub <- X_Rumiancev_cansus_Starodub%>%
+  select(`HH`:`Час учнівства`)%>%
+  mutate(status_category = fct_collapse(as.factor(`soc. status`),
+                                        kozaky = c(
+                                          "k",
+                                          "kozacha zhena",
+                                          "kozachij podsusedok",
+                                          "kozachij syn",
+                                          "kozachyj pidsusidok",
+                                          "kozachyj podsusedok",
+                                          "kozachyj syn",
+                                          "kozachyj syn-pid",
+                                          "kozackaja zhena",
+                                          "zhena kozachaja",
+                                          "zhena karabinerskaja", 
+                                          "sotennoho osaula syn",
+                                          "sotennoho pysaria syn",
+                                          "sotennoho pysaria vdova",
+                                          "znachkovoho tovarysha doch'",
+                                          "znachkovoho tovarysha syn",
+                                          "polkovoj ciriul'nik, byvshyj kozak"
+                                        ),
+                                        
+                                        pospoliti = c(
+                                          "p",
+                                          "muzhychaja zhena",
+                                          "muzhychij syn",
+                                          "muzhychka",
+                                          "muzhychoho zvanija",
+                                          "muzhychyj syn",
+                                          "muzhyckaja zhena",
+                                          "muzhyckij syn",
+                                          "muzhyckoj syn",
+                                          "muzhycyj syn",
+                                          "muzhechaja dochka",
+                                          "syn muzhyckij",
+                                          "zvanija muzhyckoho",
+                                          "poddancheskij syn",
+                                          "poddanicheskij syn",
+                                          "poddanyj",
+                                          "doch' poddanicheskaja",
+                                          "vladenija hrafa Kirila Hrihorievicha Razumovskoho",
+                                          "vladenija umersheho podskarbija heneral'noho Vasylia Hudovicha"
+                                        ),
+                                        mishchany = c(
+                                          "m",
+                                          "m, baba",
+                                          "syn muzykanta, m",
+                                          "kupec",
+                                          "kupec'",
+                                          "kupeckij syn",
+                                          "kupiec (hrek)",
+                                          "hrek",  "honcharova zhena"
+                                        ),
+                                        pidsusidky = c(
+                                          "pid",
+                                          "k-pid",
+                                          "m-pid",
+                                          "p-pid",
+                                          "poddanyj-pid",
+                                          "pid zvanija raznochinskoho",
+                                          "kozachyj pidsusidok",   # дублюється — можна залишити тут або в козаках
+                                          "kozachij podsusedok",
+                                          "dochka pidsusidka",
+                                          "zhivet v sosediakh",
+                                          "pid-diakovskij syn"
+                                        ),
+                                        inshi = c(
+                                          "krepostnaja",
+                                          "krepostnaja velikorossijanka",
+                                          "kripachka",
+                                          "kripak",
+                                          "byvshyj pushkar",
+                                          "diakonskoj syn",
+                                          "doch' diaka",
+                                          "doch' kanceliarista",
+                                          "doch' shliakhetskaja",
+                                          "doch' soldatskaja",
+                                          "dochka harmasha",
+                                          "dovbysh artilerii polkovoj",
+                                          "dyjakons'kyj syn",
+                                          "husarskaja zhena",
+                                          "inozemka",
+                                          "kanceliarist",
+                                          "kanceliarist polkovoj",
+                                          "karabinerka",
+                                          "karabinerskaja zhena",
+                                          "m (ranishe buv pushkarskoho, do obmezhennia kil'kosti pushkariv)",
+                                          "otstavnoj husar",
+                                          "otstavnoj husar, naciji i very hrecheskoj",
+                                          "otstavnoj husarskoho polku kapral venherskoj nacji",
+                                          "otstavnoj polkovoj ciriul'nik",
+                                          "pol'skoj nacyji",
+                                          "polkovoj artilerii pushkar",
+                                          "popadia",
+                                          "popovich",
+                                          "popovskaja doch'",
+                                          "popovskij syn",
+                                          "popovskoho zvanija",
+                                          "porody evrejskoj",
+                                          "prirody prusskoj",
+                                          "pushkar",
+                                          "pushkar artilerii polkovoj",
+                                          "pushkarka",
+                                          "pushkarskaja doch'",
+                                          "Pushkarskaja zhena",
+                                          "pushkarskij syn",
+                                          "pushkarskoho zvanija",
+                                          "zvanija pushkarskoho",
+                                          "raskol'nica",
+                                          "raskol'nickaja doch'",
+                                          "raskol'nik",
+                                          "velikorossijanin, raskol'nik",
+                                          "sirota",
+                                          "sirota rodstva nepomniashchaja",
+                                          "soldat",
+                                          "streleckoj syn",
+                                          "sviashchennichyj syn",
+                                          "syn diachka",
+                                          "syn diaka",
+                                          "syn kanceliarysta",
+                                          "syn ponomarskij",
+                                          "syn popovskij",
+                                          "syn sviashchenika",
+                                          "syn sviashchennika",
+                                          "vdova kanceliarista polkovoho",
+                                          "vdova pushkaria",
+                                          "vdova vojskovoho kanceliarista",
+                                          "Venherskoho husarskoho polku praporshchica",
+                                          "venherskoho husarskoho polku vdova",
+                                          "zvanija raznochinskoho",
+                                          "zvanija shliakhetskoho",
+                                          "doch' shliakhetskaja",
+                                          "sotennoho pysaria vdova",
+                                          "syn muzhyckij"
+                                        )
+  ),
+  age = parse_double(age, locale = locale(decimal_mark = ',')),
+  marital = fct_collapse(`marital status`, married =c("married", "zhenka"), unmarried = c("syrota","unmarried"), widiwed = c("vdov", "vdova")))
+
+tidy_starodub <- tidy_starodub%>%
+  mutate(hospodar_ss = if_else(ralation=="hospodar", status_category, NA))%>%
+  fill(hospodar_ss)%>%
+  mutate(status_category = if_else(is.na(status_category) & 
+                                   str_detect(ralation,regex('doch|brat|syn|sest', ignore_case = TRUE)), 
+                                 hospodar_ss, 
+                                 status_category))

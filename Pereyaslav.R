@@ -240,4 +240,3 @@ tidy_pereyaslav%>%
   geom_boxplot(aes(social_status, age, colour = is_working))
 
 
-
