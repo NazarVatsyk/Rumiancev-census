@@ -4,6 +4,7 @@ ggplot(tidy_pereyaslav%>%filter(sex=="m", !is.na(age)))+
   coord_flip()+
   labs(title = " ", x = "", y = "")
 ggplot(tidy_pereyaslav%>%filter(sex=="f", !is.na(age)))+
+  coord_flip()+
   geom_bar(aes(cut_width(age, 5,boundary = 0)), fill = "pink")+
   labs(title = "Статево-вікова піраміда Переяслава", x = "", y = "")
 
@@ -89,12 +90,13 @@ tidy_pereyaslav %>%
   labs(x= "status", y = "age")+
   theme_minimal()
 
+#the age of the youngest worker
 tidy_pereyaslav %>%
   filter(str_detect(status, "rabot")) %>%
   summarize(min(age, na.rm = TRUE))
 
 #Workers' income
-rabotniki <- tidy_pereyaslav%>%
+workers <- tidy_pereyaslav%>%
   filter(str_detect(status, "rab")|status =="hospodar")%>%
   mutate(hosp_ss = if_else(status == "hospodar", social_status, NA),
          hosp_inc = if_else(status == "hospodar", capital, NA),
@@ -104,25 +106,18 @@ rabotniki <- tidy_pereyaslav%>%
   fill(hosp_inc)%>%
   filter(status!="hospodar")%>%
   mutate(money = if_else(str_detect(`wage(for_naymyt\`)`, regex("[0-9]")), parse_double(`wage(for_naymyt\`)`, locale = locale(decimal_mark = ",")),NA))%>%
-  mutate(wage = as.factor(`wage(for_naymyt\`)`))%>%
-  mutate(`Спосіб оплати` = fct_collapse(wage,
-                                        `За гроші` = c("Z zarabotku priadivoho","Z zarabotka priazhej khoziajskoj","na 0,5 roku za 40 kop","0,15","0,4", "0,6","0,8", "1","1 v god, odezha i kharchi khozyajskie","1,1","1,2","1,3", "1,4", "1,5", "1,8", "2", "2 v god, odezha khozyajskaya", "2,2", "2,4", "2,5", "3", "3, na odeji hoziayskoy", "3,25", "3,4","3,5", "4", "5", "6","60 kop", "60 kopeek, v odeyanii khozyajskom","7","8", "9"),                     
-                                        `За харчування та одяг` = c("Bez zaplaty za propitanie" ,"за пропитание в одежу","Za propitanie i snabzhenie", "Za propitanie I snabzhenie",  "Za propitanie I odezhu" ,"Za propitanie i odezhu", "Za propitanie bez zaplaty" ,"Za propitanie (bol'she pitaetsia z milostynnoho podajanija)","Za propitanie"  ,"Po svojstvu v odeyanii khozyajskom" ,"Na vsem soderzhanii svoem" ,"Na poslushanii", "Na propitanii hoziayskom" ,"Bez zaplaty na vsem svoem soderzhanii" ,"Bez zaplaty na vsem soderzhanii hoziajskom", "Bez zaplaty","Bez zaplaty na vsem soderzhanii hoziajskom"),
-                                        `Через борг` = "Za dolh 19 rublej po prohovoru hrodskoho suda"  ,
-                                        `За навчання` = c("Za vospitanie i obuchenie remeslu", "Vo izuchenii remesla" ,"bez zaplaty za obuchenie remeslu",  "Za obechenie remesla","Za obuchenie ramaslu", "Za obuchenie remesla", "Za obuchenie remesla, plat`e khozyajskoe", "Za obuchenie remeslu", "Za obuzhenie remeslu shevskomu"),
-                                        інше = c("Z diskrecij")))%>%
-  select(dvor,age, social_status, sex, job_experience, money, `wage`,`Спосіб оплати`, hosp_ss, hosp_inc, hosp_job)
+  select(dvor,age, social_status, sex, job_experience, money, `wage`, hosp_ss, hosp_inc, hosp_job)
 
-ggplot(rabotniki)+
+ggplot(workers)+
   geom_boxplot(aes(x= hosp_ss, y=age))
 
-rabotniki%>%
-  mutate(hosp_inc=cut_width(hosp_inc, width =3, boundary = 1))%>%
+workers%>%
+  mutate(hosp_inc=cut_width(hosp_inc, width =5, boundary = 1))%>%
   group_by(hosp_inc)%>%
   count()%>%
   left_join(tidy_pereyaslav%>%
               filter(status == "hospodar"&!is.na(capital))%>%
-              mutate(hosp_inc = cut_width(capital, width =3, boundary = 1))%>%
+              mutate(hosp_inc = cut_width(capital, width =5, boundary = 1))%>%
               group_by(hosp_inc)%>%
               count(),
             join_by(hosp_inc))%>%
@@ -130,66 +125,88 @@ rabotniki%>%
   ggplot()+
   geom_col(aes(hosp_inc, workers_per_owner))
 
-ggplot(rabotniki)+
+ggplot(workers)+
   geom_point(aes(job_experience,money))
-oplata_hosp_ss <- rabotniki%>%
-  filter(!is.na(`Спосіб оплати`))%>%
-  group_by(hosp_ss, `Спосіб оплати`)%>%
-  count(`Спосіб оплати`)
-oplata_rab_ss <- rabotniki%>%
+
+#how landlords of different social ststuses pay
+workers%>%
+  filter(!is.na(wage))%>%
+  group_by(hosp_ss, `wage`)%>%
+  count(`wage`)%>%
+  left_join(workers%>%
+              filter(!is.na(wage))%>%
+              group_by(hosp_ss, `wage`)%>%
+              count(`wage`)%>%
+              group_by(hosp_ss)%>%
+              summarize(y = sum(n))
+              ,join_by(hosp_ss))%>%
+  mutate(ratio = n/y)%>%
+  ggplot()+
+  geom_col(aes(hosp_ss, ratio*100, fill= wage), position = "dodge")+
+  labs(title = "Структура оплати роботи за станом господаря",x="Стан господаря",y="%")+
+  theme_minimal()
+
+#how workers get paid  
+workers%>%
   filter(social_status=="Підсусідки"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті")%>%
-  filter(!is.na(`Спосіб оплати`))%>%
-  group_by(social_status, `Спосіб оплати`)%>%
-  count(`Спосіб оплати`)
-oplata_ratio <- left_join(oplata_hosp_ss,oplata_hosp_ss%>%group_by(hosp_ss)%>%summarise(y = sum(n)),join_by(hosp_ss))%>%
+  filter(!is.na(`wage`))%>%
+  group_by(social_status, wage)%>%
+  count(wage)%>%
+  left_join(workers%>%
+              filter(social_status=="Підсусідки"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті")%>%
+              filter(!is.na(`wage`))%>%
+              group_by(social_status, wage)%>%
+              count(wage)%>%
+              group_by(social_status)%>%
+              summarise(y = sum(n)),
+            join_by(social_status))%>%
   mutate(ratio = n/y)%>%
-  select(hosp_ss, `Спосіб оплати`, ratio)
-oplata_rabu_ratio <- left_join(oplata_rab_ss,oplata_rab_ss%>%group_by(social_status)%>%summarise(y = sum(n)),join_by(social_status))%>%
-  mutate(ratio = n/y)%>%
-  select(social_status, `Спосіб оплати`, ratio)
-ggplot(oplata_ratio)+
-  geom_col(aes(hosp_ss, ratio*100, fill= `Спосіб оплати`), position = "dodge")+
-  labs(title = "Структура оплати роботи за станом господаря",x="Стан господаря",y="%")
-ggplot(oplata_rabu_ratio)+
-  geom_col(aes(social_status, ratio*100, fill= `Спосіб оплати`), position = "dodge")+
-  labs(title = "Структура оплати роботи за станом працівника",x="Стан",y="%")
-hospodar_hroshi_platut <- rabotniki%>%
-  filter(`Спосіб оплати`=="За гроші")
+  ggplot()+
+  geom_col(aes(social_status, ratio*100, fill= `wage`), position = "dodge")+
+  labs(title = "Структура оплати роботи за станом працівника",x="Стан",y="%")+
+  theme_minimal()
 
 
 #migrants
-pruizd <- tidy_pereyaslav%>%
+migrants <- tidy_pereyaslav%>%
   filter(root!="Pereyaslav"&root!="Pereyaslav podvarok Zadolhomostianskij"&root!="Pereyaslava"&!is.na(root))%>%
   filter(!is.na(social_status)&social_status!="unknown")
-ggplot(pruizd)+
+ggplot(migrants)+
   geom_boxplot(aes(social_status, age))
-ggplot(pruizd%>%group_by(social_status)%>%count)+
+ggplot(migrants%>%group_by(social_status)%>%count)+
   geom_col(aes(fct_reorder(social_status, n),n))
 
-ratio_of_aliens <- left_join(pruizd%>%count(social_status),social_structure, join_by(social_status))%>%
+migrants%>%
+  count(social_status)%>%
+  left_join(tidy_pereyaslav%>%
+              filter(!is.na(root))%>%
+              group_by(social_status)%>%
+              count(), 
+            join_by(social_status))%>%
   mutate(ratio=n.x/n.y)%>%
-  select(social_status, ratio)
-ggplot(ratio_of_aliens%>%filter(social_status=="Підсусідки"|social_status=="Шляхта"|social_status=="Міщани"|social_status=="Козаки"|social_status=="Посполиті"))+
+  select(social_status, ratio)%>%
+  ggplot()+
   geom_col(aes(fct_reorder(social_status, ratio), ratio*100))+
-  labs(title="Частка людей, які не походять з Переяслава",x ="Стан",y="%")
-ggplot(rabotniki)+
-  geom_bar(aes(hosp_ss))
+  labs(title="Частка людей, які не походять з Переяслава",x ="Стан",y="%",
+       caption = "серед тих, у кого вказано походження")
 
 
-pospoluti_rabochi <- tidy_pereyaslav%>%
-  filter(social_status=="Посполиті",!is.na(status))%>%
-  mutate(rabotnik = (status=="rabotnik"|status=="rabotnitsa"|status=="rabotnica"))%>%
-  mutate(rabotnik = if_else(rabotnik==TRUE, "Так","Ні"))
-ggplot(pospoluti_rabochi%>%group_by(rabotnik)%>%count())+
-  geom_col(aes(rabotnik, n, fill=rabotnik))+
+tidy_pereyaslav%>%
+  filter(social_status=="Посполиті")%>%
+  mutate(worker = (status=="rabotnik"|status=="rabotnitsa"|status=="rabotnica"))%>%
+  mutate(is_worker = if_else(worker==TRUE, "Так","Ні"))%>%
+  group_by(is_worker)%>%count()%>%
+  ggplot()+
+  geom_col(aes(is_worker, n))+
   theme(legend.position="none")+
-  labs(title ="Чи працюють в  наймі посполиті", x = " ", y = "Кількість")
-pruizd <- pruizd%>%
+  labs(title ="Чи працюють в наймі посполиті", x = " ", y = "Кількість")
+
+migrants <- migrants%>%
   mutate(marital = fct_collapse(marital, married = c("married", "maried"), unmarried = c("unmarried"), widowed = c("vdov", "vdova")))
-pruizd%>%
+migrants%>%
   group_by(social_status, marital)%>%
   count()%>%
-  left_join(pruizd%>%group_by(social_status)%>%count(), join_by(social_status))%>%
+  left_join(migrants%>%group_by(social_status)%>%count(), join_by(social_status))%>%
   group_by(social_status, marital)%>%
   summarize(ratio = n.x/n.y)%>%
   ggplot()+
